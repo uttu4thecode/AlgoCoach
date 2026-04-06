@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routers import auth
 
 app = FastAPI(
     title="AlgoCoach API",
@@ -15,6 +16,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
+
 @app.get("/")
 def root():
     return {"message": "AlgoCoach API is running!"}
@@ -22,3 +25,7 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "ok", "app": "AlgoCoach"}
+
+
+
+
