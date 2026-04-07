@@ -4,6 +4,8 @@ from sqlalchemy.orm import sessionmaker
 from app.config import DATABASE_URL
 import os
 
+USING_SQLITE_FALLBACK = False
+
 # Try Supabase first, fallback to SQLite if offline
 try:
     if DATABASE_URL and "postgresql" in DATABASE_URL:
@@ -16,6 +18,7 @@ try:
 except Exception as e:
     # Fallback to SQLite for local development
     print(f"[DATABASE] Supabase unavailable ({type(e).__name__}). Using SQLite locally.")
+    USING_SQLITE_FALLBACK = True
     db_path = os.path.join(os.path.dirname(__file__), "..", "algocoach.db")
     engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
 
