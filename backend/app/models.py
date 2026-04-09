@@ -41,3 +41,17 @@ class Problem(Base):
     constraints = Column(Text)
     test_cases = Column(JSON)
     created_at = Column(DateTime, default=func.now())
+    
+    
+class Submission(Base):
+    __tablename__ = "submissions"
+
+    id = Column(UUIDType, primary_key=True, default=uuid_default)
+    user_id = Column(UUIDType, nullable=False)
+    problem_id = Column(Integer, nullable=False)
+    code = Column(Text, nullable=False)
+    language = Column(String(30))
+    status = Column(String(20))  # accepted / wrong_answer / error
+    runtime_ms = Column(Integer)
+    hints_used = Column(Integer, default=0)
+    created_at = Column(DateTime, default=func.now())
