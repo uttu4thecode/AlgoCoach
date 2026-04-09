@@ -8,10 +8,11 @@ from datetime import datetime, timedelta
 from app.database import get_db
 from app.models import User
 from app.config import SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
+from app.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 # --- Pydantic schemas (request/response shapes) ---
 
@@ -40,11 +41,12 @@ def hash_password(password: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
-def create_token(user_id: str, role: str) -> str:
+def create_token(user_id: str, role: str, email: str) -> str:
     expire = datetime.utcnow() + timedelta(minutes=JWT_EXPIRE_MINUTES)
     payload = {
         "sub": str(user_id),
         "role": role,
+        "email": email,
         "exp": expire
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=JWT_ALGORITHM)
@@ -71,7 +73,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    token = create_token(str(user.id), user.role)
+    token = create_token(str(user.id), user.role, user.email)
     return TokenResponse(
         access_token=token,
         user_name=user.name,
@@ -87,9 +89,24 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
             detail="Invalid email or password"
         )
 
-    token = create_token(str(user.id), user.role)
+    token = create_token(str(user.id), user.role, user.email)
     return TokenResponse(
         access_token=token,
         user_name=user.name,
         user_role=user.role
     )
+
+
+class UserResponse(BaseModel):
+    name: str
+    email: str
+    role: str
+    college: str = None
+    batch: str = None
+
+    class Config:
+        from_attributes = True
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
