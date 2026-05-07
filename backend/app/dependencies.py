@@ -27,7 +27,6 @@ def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token"
             )
-        # SQLAlchemy UUID columns expect uuid.UUID objects, not plain strings.
         user_id = uuid.UUID(user_id_str)
     except ValueError:
         user_id = None

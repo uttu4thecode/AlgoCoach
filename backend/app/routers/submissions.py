@@ -14,16 +14,27 @@ router = APIRouter(prefix="/submissions", tags=["submissions"])
 class SubmitRequest(BaseModel):
     problem_id: int
     code: str
-    language: str  
+    language: str
 
 class SubmissionResult(BaseModel):
     submission_id: str
     status: str
     passed: int
     total: int
+    message: str
     stdout: Optional[str]
     stderr: Optional[str]
     runtime: Optional[str]
+
+def _determine_status(passed: int, total: int, had_error: bool) -> tuple[str, str]:
+    if had_error and passed == 0:
+        return "error", "Runtime error occurred. Check your code for exceptions."
+    if passed == total:
+        return "accepted", f"All {total} test cases passed! Great job!"
+    if passed > 0:
+        return "wrong_answer", f"{passed}/{total} test cases passed. Keep trying!"
+    return "wrong_answer", f"0/{total} test cases passed. Review your logic."
+
 
 @router.post("/", response_model=SubmissionResult)
 async def submit_code(
@@ -31,12 +42,10 @@ async def submit_code(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    
     problem = db.query(Problem).filter(Problem.id == data.problem_id).first()
     if not problem:
         raise HTTPException(status_code=404, detail="Problem not found")
 
-    
     test_cases_raw = problem.test_cases or {}
     test_cases = test_cases_raw.get("test_cases", [])
 
@@ -73,24 +82,16 @@ async def submit_code(
         if normalize(actual_output) == normalize(expected_str):
             passed += 1
 
-    
-    if passed == total:
-        final_status = "accepted"
-    elif passed > 0:
-        final_status = "partial"
-    else:
-        final_status = "wrong_answer"
+    final_status, message = _determine_status(passed, total, had_execution_error)
 
-    if had_execution_error and passed == 0:
-        final_status = "error"
+    db_status = final_status
 
-    
     submission = Submission(
         user_id=current_user.id,
         problem_id=data.problem_id,
         code=data.code,
         language=data.language,
-        status=final_status,
+        status=db_status,
         runtime_ms=int(float(last_runtime) * 1000) if last_runtime else None,
     )
     db.add(submission)
@@ -102,10 +103,12 @@ async def submit_code(
         status=final_status,
         passed=passed,
         total=total,
+        message=message,
         stdout=last_stdout,
         stderr=last_stderr,
         runtime=last_runtime,
     )
+
 
 @router.get("/my", response_model=List[dict])
 def my_submissions(

@@ -6,17 +6,14 @@ import os
 
 USING_SQLITE_FALLBACK = False
 
-# Try Supabase first, fallback to SQLite if offline
 try:
     if DATABASE_URL and "postgresql" in DATABASE_URL:
         engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args={"connect_timeout": 5})
-        # Test connection immediately
         with engine.connect() as conn:
             pass
     else:
         raise Exception("No DATABASE_URL")
 except Exception as e:
-    # Fallback to SQLite for local development
     print(f"[DATABASE] Supabase unavailable ({type(e).__name__}). Using SQLite locally.")
     USING_SQLITE_FALLBACK = True
     db_path = os.path.join(os.path.dirname(__file__), "..", "algocoach.db")

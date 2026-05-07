@@ -14,8 +14,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
-# --- Pydantic schemas (request/response shapes) ---
-
 class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
@@ -33,8 +31,6 @@ class TokenResponse(BaseModel):
     user_name: str
     user_role: str
 
-# --- Helper functions ---
-
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
@@ -50,8 +46,6 @@ def create_token(user_id: str, role: str, email: str) -> str:
         "exp": expire
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=JWT_ALGORITHM)
-
-# --- Endpoints ---
 
 @router.post("/register", response_model=TokenResponse)
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
@@ -132,8 +126,6 @@ def my_progress(
 
     total = len(submissions)
     accepted = len([s for s in submissions if s.status == "accepted"])
-    
-    # Topic-wise breakdown
     topic_map = {}
     for s in submissions:
         topic = problem_topic_by_id.get(s.problem_id)

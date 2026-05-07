@@ -35,8 +35,8 @@ def calculate_score(accepted: int, total: int) -> float:
     if total == 0:
         return 0.0
 
-    volume_bonus = min(accepted * 2, 30)  # max 30 points for volume
-    accuracy = (accepted / total) * 70     # max 70 points for accuracy
+    volume_bonus = min(accepted * 2, 30)
+    accuracy = (accepted / total) * 70
     return round(min(volume_bonus + accuracy, 100.0), 2)
 
 

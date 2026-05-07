@@ -3,8 +3,6 @@ import tempfile
 import os
 import time
 
-# Local execution - no API keys needed!
-
 LANGUAGE_EXTENSIONS = {
     "python": ".py",
     "javascript": ".js",
@@ -20,10 +18,6 @@ LANGUAGE_RUN_COMMANDS = {
 }
 
 async def run_code(source_code: str, language: str, stdin: str = "") -> dict:
-    """
-    Execute code locally using subprocess.
-    Returns status, stdout, stderr, time.
-    """
     lang_lower = language.lower()
     
     if lang_lower not in LANGUAGE_EXTENSIONS:
@@ -39,8 +33,6 @@ async def run_code(source_code: str, language: str, stdin: str = "") -> dict:
 
     try:
         ext = LANGUAGE_EXTENSIONS[lang_lower]
-        
-        # Create temp file
         with tempfile.NamedTemporaryFile(
             mode='w',
             suffix=ext,
@@ -51,7 +43,6 @@ async def run_code(source_code: str, language: str, stdin: str = "") -> dict:
             temp_file = f.name
 
         try:
-            # Compile if needed (C/C++/Java)
             if lang_lower == "cpp":
                 compile_result = subprocess.run(
                     ["g++", temp_file, "-o", "a.out"],
@@ -85,8 +76,6 @@ async def run_code(source_code: str, language: str, stdin: str = "") -> dict:
                         "memory": None,
                     }
 
-            # Run code using a fresh command list per execution.
-            # Avoid mutating LANGUAGE_RUN_COMMANDS across test cases.
             cmd = LANGUAGE_RUN_COMMANDS[lang_lower].copy()
             if lang_lower in ["python", "javascript"]:
                 cmd.append(temp_file)
@@ -111,7 +100,6 @@ async def run_code(source_code: str, language: str, stdin: str = "") -> dict:
             }
 
         finally:
-            # Cleanup
             try:
                 os.remove(temp_file)
             except:

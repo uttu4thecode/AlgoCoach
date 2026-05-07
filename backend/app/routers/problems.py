@@ -6,6 +6,7 @@ from typing import Optional, List
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 import json
+
 from app.database import get_db, USING_SQLITE_FALLBACK
 from app.models import Problem
 from app.dependencies import get_current_user, get_admin_user
@@ -34,15 +35,6 @@ def _supabase_get(path: str, params: dict) -> list:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _map_problem_list_rows(rows: list):
-    return [ProblemListItem(**row) for row in rows]
-
-
-def _map_problem_detail_row(row: dict):
-    return ProblemDetail(**row)
-
-# --- Response schema ---
-
 class ProblemListItem(BaseModel):
     id: int
     title: str
@@ -68,7 +60,27 @@ class ProblemDetail(BaseModel):
     class Config:
         from_attributes = True
 
-# --- Endpoints ---
+class ProblemCreate(BaseModel):
+    title: str
+    slug: str
+    description: str
+    difficulty: str
+    topic: Optional[str] = None
+    companies: Optional[List[str]] = None
+    examples: Optional[dict] = None
+    constraints: Optional[str] = None
+    test_cases: Optional[dict] = None
+
+class ProblemUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    difficulty: Optional[str] = None
+    topic: Optional[str] = None
+    companies: Optional[List[str]] = None
+    examples: Optional[dict] = None
+    constraints: Optional[str] = None
+    test_cases: Optional[dict] = None
+
 
 @router.get("/", response_model=List[ProblemListItem])
 def get_problems(
@@ -87,7 +99,7 @@ def get_problems(
         if topic:
             params["topic"] = f"eq.{topic}"
         rows = _supabase_get("problems", params)
-        return _map_problem_list_rows(rows)
+        return [ProblemListItem(**row) for row in rows]
 
     try:
         query = db.query(Problem)
@@ -106,7 +118,8 @@ def get_problems(
         if topic:
             params["topic"] = f"eq.{topic}"
         rows = _supabase_get("problems", params)
-        return _map_problem_list_rows(rows)
+        return [ProblemListItem(**row) for row in rows]
+
 
 @router.get("/{slug}", response_model=ProblemDetail)
 def get_problem(
@@ -125,7 +138,7 @@ def get_problem(
         )
         if not rows:
             raise HTTPException(status_code=404, detail="Problem not found")
-        return _map_problem_detail_row(rows[0])
+        return ProblemDetail(**rows[0])
 
     try:
         problem = db.query(Problem).filter(Problem.slug == slug).first()
@@ -143,20 +156,8 @@ def get_problem(
         )
         if not rows:
             raise HTTPException(status_code=404, detail="Problem not found")
-        return _map_problem_detail_row(rows[0])
+        return ProblemDetail(**rows[0])
 
-
-
-class ProblemCreate(BaseModel):
-    title: str
-    slug: str
-    description: str
-    difficulty: str
-    topic: Optional[str]
-    companies: Optional[List[str]]
-    examples: Optional[dict]
-    constraints: Optional[str]
-    test_cases: Optional[dict]
 
 @router.post("/", response_model=ProblemDetail)
 def create_problem(
@@ -173,3 +174,38 @@ def create_problem(
     db.commit()
     db.refresh(problem)
     return problem
+
+
+@router.put("/{problem_id}", response_model=ProblemDetail)
+def update_problem(
+    problem_id: int,
+    data: ProblemUpdate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user)
+):
+    problem = db.query(Problem).filter(Problem.id == problem_id).first()
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(problem, field, value)
+
+    db.commit()
+    db.refresh(problem)
+    return problem
+
+
+@router.delete("/{problem_id}")
+def delete_problem(
+    problem_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user)
+):
+    problem = db.query(Problem).filter(Problem.id == problem_id).first()
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    db.delete(problem)
+    db.commit()
+    return {"message": f"Problem '{problem.title}' deleted successfully."}
