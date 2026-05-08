@@ -112,23 +112,31 @@ def my_progress(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    from app.models import HintLog
+
     submissions = db.query(Submission).filter(
         Submission.user_id == current_user.id
     ).all()
 
-    problem_ids = {s.problem_id for s in submissions}
-    problem_topic_by_id = {}
-    if problem_ids:
-        problem_rows = db.query(Problem.id, Problem.topic).filter(
-            Problem.id.in_(problem_ids)
-        ).all()
-        problem_topic_by_id = {pid: topic for pid, topic in problem_rows}
-
     total = len(submissions)
     accepted = len([s for s in submissions if s.status == "accepted"])
+
+    hints_used = db.query(HintLog).filter(
+        HintLog.user_id == current_user.id
+    ).count()
+
+    solved_problem_ids = {
+        s.problem_id for s in submissions if s.status == "accepted"
+    }
+
+    easy_solved = medium_solved = hard_solved = 0
     topic_map = {}
+
     for s in submissions:
-        topic = problem_topic_by_id.get(s.problem_id)
+        problem = db.query(Problem).filter(Problem.id == s.problem_id).first()
+        if not problem:
+            continue
+        topic = problem.topic
         if topic:
             if topic not in topic_map:
                 topic_map[topic] = {"total": 0, "accepted": 0}
@@ -136,9 +144,51 @@ def my_progress(
             if s.status == "accepted":
                 topic_map[topic]["accepted"] += 1
 
+    for pid in solved_problem_ids:
+        p = db.query(Problem).filter(Problem.id == pid).first()
+        if p:
+            if p.difficulty == "easy": easy_solved += 1
+            elif p.difficulty == "medium": medium_solved += 1
+            elif p.difficulty == "hard": hard_solved += 1
+
+    # Placement Score Algorithm
+    raw_score = (easy_solved * 2) + (medium_solved * 4) + (hard_solved * 7)
+    accuracy = (accepted / total * 100) if total > 0 else 0
+    accuracy_bonus = (accuracy / 100) * 20
+    hint_penalty = min(hints_used * 0.5, 15)
+    volume_bonus = min(total * 0.5, 10)
+    placement_score = round(
+        min(max(raw_score + accuracy_bonus + volume_bonus - hint_penalty, 0), 100), 1
+    )
+
+    if placement_score >= 80:
+        level, advice = "Placement Ready", "Excellent! You are well prepared for placements."
+    elif placement_score >= 60:
+        level, advice = "Almost Ready", "Good progress! Focus on medium and hard problems."
+    elif placement_score >= 40:
+        level, advice = "In Progress", "Keep practicing. Try to solve more problems daily."
+    else:
+        level, advice = "Just Started", "Start with easy problems and build your confidence."
+
+    weak_topics = [
+        t for t, d in topic_map.items()
+        if d["total"] > 0 and (d["accepted"] / d["total"]) < 0.5
+    ]
+
     return {
+        "placement_score": placement_score,
+        "level": level,
+        "advice": advice,
         "total_submissions": total,
         "accepted": accepted,
-        "accuracy": round((accepted/total*100) if total > 0 else 0, 2),
-        "topic_breakdown": topic_map
+        "accuracy": round(accuracy, 2),
+        "hints_used": hints_used,
+        "problems_solved": len(solved_problem_ids),
+        "difficulty_breakdown": {
+            "easy": easy_solved,
+            "medium": medium_solved,
+            "hard": hard_solved
+        },
+        "topic_breakdown": topic_map,
+        "weak_topics": weak_topics
     }
